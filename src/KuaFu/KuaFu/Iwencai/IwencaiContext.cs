@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
 
@@ -16,7 +17,7 @@ namespace KuaFu.Iwencai
             int total;
             string token;
             GetDailyStockFromHtml(keyWord, out total, out token);
-            var results = GetDailyStockFromAjax<T>(total, token);
+            IEnumerable<T> results = GetDailyStockFromAjax<T>(total, token);
             return results;
         }
 
@@ -33,7 +34,7 @@ namespace KuaFu.Iwencai
                     string responseString = HttpGet(url);
                     Debug.WriteLine(responseString);
 
-                    var result = GetDailyStockFromAjaxResult<T>(responseString);
+                    IEnumerable<T> result = GetDailyStockFromAjaxResult<T>(responseString);
                     return result;
                 }
                 catch (Exception e)
@@ -69,24 +70,24 @@ namespace KuaFu.Iwencai
         private static void GetDailyStockFromHtmlString(string responseString, out int total, out string token)
         {
             string allResultString =
-                    Regex.Match(responseString, "^var allResult = (?<ALL_RESULT>.*?);$",
-                        RegexOptions.Multiline | RegexOptions.ExplicitCapture).Groups["ALL_RESULT"].Value;
+                Regex.Match(responseString, "^var allResult = (?<ALL_RESULT>.*?);$",
+                    RegexOptions.Multiline | RegexOptions.ExplicitCapture).Groups["ALL_RESULT"].Value;
             allResultString = Regex.Unescape(allResultString);
-            var allResult = JObject.Parse(allResultString);
-            total = (int)allResult["total"];
-            token = (string)allResult["token"];
+            JObject allResult = JObject.Parse(allResultString);
+            total = (int) allResult["total"];
+            token = (string) allResult["token"];
         }
 
-        private static IEnumerable<T> GetDailyStockFromAjaxResult<T>(string responseString) where T: class, new()
+        private static IEnumerable<T> GetDailyStockFromAjaxResult<T>(string responseString) where T : class, new()
         {
-            var rootObject = JObject.Parse(responseString);
-            var fieldTypes = (JArray)rootObject["fieldType"];
-            var list = (JArray)rootObject["list"];
-            var properties = typeof (T).GetProperties()
+            JObject rootObject = JObject.Parse(responseString);
+            var fieldTypes = (JArray) rootObject["fieldType"];
+            var list = (JArray) rootObject["list"];
+            PropertyInfo[] properties = typeof (T).GetProperties()
                 .Where(item => item.GetCustomAttributes(typeof (IwencaiAttribute), true).Length > 0)
                 .OrderBy(item =>
                 {
-                    var attribs = item.GetCustomAttributes(typeof (IwencaiAttribute), true);
+                    object[] attribs = item.GetCustomAttributes(typeof (IwencaiAttribute), true);
                     return ((IwencaiAttribute) attribs[0]).Order;
                 })
                 .ToArray();
@@ -108,13 +109,14 @@ namespace KuaFu.Iwencai
                 }
                 yield return t;
             }
+            //return null;
         }
 
         private static string HttpGet(string url)
         {
-            var req = (HttpWebRequest)WebRequest.Create(url);
+            var req = (HttpWebRequest) WebRequest.Create(url);
             req.Timeout = 10000;
-            using (var resp = (HttpWebResponse)req.GetResponse())
+            using (var resp = (HttpWebResponse) req.GetResponse())
             {
                 var reader = new StreamReader(resp.GetResponseStream());
                 return reader.ReadToEnd();
