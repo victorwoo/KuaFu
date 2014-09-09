@@ -68,8 +68,8 @@ namespace KuaFu.NetEase
             DateTime endDate;
             GetDateRange(symbol, out startDate, out endDate);
 
-            Debug.WriteLine(startDate);
-            Debug.WriteLine(endDate);
+            //Debug.WriteLine(startDate);
+            //Debug.WriteLine(endDate);
 
             var results = GetCsv(code, startDate, endDate);
             return results;

@@ -9,6 +9,11 @@ namespace KuaFu.NetEase
 {
     public class StockInfo
     {
+        public StockInfo()
+        {
+            IsCompleted = false;
+        }
+
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public int StockInfoId { get; set; }
@@ -22,5 +27,8 @@ namespace KuaFu.NetEase
         public string Symbol { get; set; }
 
         public string Name { get; set; }
+
+        [Index]
+        public bool IsCompleted { get; set; }
     }
 }

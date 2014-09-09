@@ -37,13 +37,31 @@ namespace KuaFu
 
             Database.SetInitializer(
                 new DropCreateDatabaseAlways<NetEaseDbContext>());
+
+            Console.WriteLine("清除脏数据");
+            using (var db = new NetEaseDbContext())
+            {
+                foreach (var stockInfo in db.StockInfoes.Where(item => !item.IsCompleted))
+                {
+                    var symbol = stockInfo.Symbol;
+                    var dirtyDetails = db.StockDetails.Where(item => item.Symbol == symbol);
+                    db.StockDetails.RemoveRange(dirtyDetails);
+                    db.StockInfoes.Remove(stockInfo);
+                }
+            }
+
             IEnumerable<StockInfo> stockInfoes = NetEaseContext.GetStocks();
             var i = 0;
             foreach (StockInfo stockInfo in stockInfoes)
             {
-                Console.WriteLine("正在添加第 {0} 支股票信息", i++);
+                Console.WriteLine("添加第 {0} 支股票信息", i++);
                 using (var db = new NetEaseDbContext())
                 {
+                    if (db.StockInfoes.Any(item => item.Code == stockInfo.Code))
+                    {
+                        continue;
+                    }
+
                     //if (!db.StockInfoes.Any(item => item.Code == stockInfo.Code))
                     //{
                         db.StockInfoes.Add(stockInfo);
@@ -60,6 +78,7 @@ namespace KuaFu
                         //}
                     }
 
+                    stockInfo.IsCompleted = true;
                     db.SaveChanges();
                 }
             }
