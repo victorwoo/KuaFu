@@ -1,17 +1,15 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Linq;
-using System.Text;
 using CsvHelper.Configuration;
+using CsvHelper.TypeConversion;
 
 namespace KuaFu.NetEase
 {
     public class StockDetail
     {
         [Key]
-        [DatabaseGeneratedAttribute(DatabaseGeneratedOption.Identity)]
+        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public int StockDetailId { get; set; }
 
         public DateTime Date { get; set; }
@@ -53,18 +51,43 @@ namespace KuaFu.NetEase
             Map(m => m.Date).ConvertUsing(row => DateTime.Parse(row.GetField<string>("日期")));
             Map(m => m.Symbol).ConvertUsing(row => row.GetField<string>("股票代码").TrimStart('\''));
             Map(m => m.Name).Name("名称");
-            Map(m => m.TodayClose).Name("收盘价");
-            Map(m => m.High).Name("最高价");
-            Map(m => m.Low).Name("最低价");
-            Map(m => m.TodayOpen).Name("开盘价");
-            Map(m => m.LastClose).Name("前收盘");
-            Map(m => m.Change).Name("涨跌额");
-            Map(m => m.ChangeInPercent).Name("涨跌幅");
-            Map(m => m.TurnOver).Name("换手率");
-            Map(m => m.VolumeTurnOver).Name("成交量");
-            Map(m => m.VolumeAmountTurnOver).Name("成交金额");
-            Map(m => m.TotalCapitalization).Name("总市值");
-            Map(m => m.MovingCapitalization).Name("流通市值");
+            Map(m => m.TodayClose).Name("收盘价").TypeConverter<MyDoubleConverter>();
+            Map(m => m.High).Name("最高价").TypeConverter<MyDoubleConverter>();
+            Map(m => m.Low).Name("最低价").TypeConverter<MyDoubleConverter>();
+            Map(m => m.TodayOpen).Name("开盘价").TypeConverter<MyDoubleConverter>();
+            Map(m => m.LastClose).Name("前收盘").TypeConverter<MyDoubleConverter>();
+            Map(m => m.Change).Name("涨跌额").TypeConverter<MyDoubleConverter>();
+            Map(m => m.ChangeInPercent).Name("涨跌幅").TypeConverter<MyDoubleConverter>();
+            Map(m => m.TurnOver).Name("换手率").TypeConverter<MyDoubleConverter>();
+            Map(m => m.VolumeTurnOver).Name("成交量").TypeConverter<MyDoubleConverter>();
+            Map(m => m.VolumeAmountTurnOver).Name("成交金额").TypeConverter<MyDoubleConverter>();
+            Map(m => m.TotalCapitalization).Name("总市值").TypeConverter<MyDoubleConverter>();
+            Map(m => m.MovingCapitalization).Name("流通市值").TypeConverter<MyDoubleConverter>();
+        }
+
+        public class MyDoubleConverter : ITypeConverter
+        {
+            public string ConvertToString(TypeConverterOptions options, object value)
+            {
+                throw new NotImplementedException();
+            }
+
+            public object ConvertFromString(TypeConverterOptions options, string text)
+            {
+                double value;
+                double.TryParse(text, out value);
+                return value;
+            }
+
+            public bool CanConvertFrom(Type type)
+            {
+                return type == typeof (string);
+            }
+
+            public bool CanConvertTo(Type type)
+            {
+                throw new NotImplementedException();
+            }
         }
     }
 }

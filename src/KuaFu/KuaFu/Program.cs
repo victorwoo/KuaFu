@@ -49,7 +49,7 @@ namespace KuaFu
                     IEnumerable<StockDetail> histories = NetEaseContext.GetHistory(stockInfo.Symbol, stockInfo.Code);
                     foreach (StockDetail stockDetail in histories/*.Take(5)*/)
                     {
-                        Debug.WriteLine("{0} {1} {2}", stockDetail.Date, stockDetail.Name, stockDetail.TodayClose);
+                        //Debug.WriteLine("{0} {1} {2}", stockDetail.Date, stockDetail.Name, stockDetail.TodayClose);
                         if (!db.StockDetails.Any(
                             item => item.Symbol == stockDetail.Symbol && item.Date == stockDetail.Date))
                         {
