@@ -64,6 +64,7 @@
     <Compile Include="NetEase\Json\Rootobject.cs" />
     <Compile Include="NetEase\Json\List.cs" />
     <Compile Include="NetEase\NetEaseContext.cs" />
+    <Compile Include="NetEase\NetEaseDbContext.cs" />
     <Compile Include="NetEase\StockDetail.cs" />
     <Compile Include="NetEase\StockInfo.cs" />
     <Compile Include="Program.cs" />

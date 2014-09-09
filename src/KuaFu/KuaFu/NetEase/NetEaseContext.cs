@@ -50,7 +50,7 @@ namespace KuaFu.NetEase
         public static IEnumerable<StockInfo> GetStocks()
         {
             const string url =
-                "http://quotes.money.163.com/hs/service/marketradar_ajax.php?host=http://quotes.money.163.com/hs/service/marketradar_ajax.php&page=0&query=STYPE:EQA&types=&count=3&type=query";
+                "http://quotes.money.163.com/hs/service/marketradar_ajax.php?host=http://quotes.money.163.com/hs/service/marketradar_ajax.php&page=0&query=STYPE:EQA&types=&count=9999&type=query";
             string json = HttpGet(url, 10000);
 
             var rootObject = JsonConvert.DeserializeObject<Rootobject>(json);

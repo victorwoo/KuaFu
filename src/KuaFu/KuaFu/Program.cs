@@ -1,17 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
+using System.Data.Entity;
 using System.Diagnostics;
 using System.Linq;
-using System.Text;
-using KuaFu.Iwencai;
-using KuaFu.Models;
 using KuaFu.NetEase;
 
 namespace KuaFu
 {
-    class Program
+    internal class Program
     {
-        static void Main(string[] args)
+        private static void Main(string[] args)
         {
             //var iwencaiContext = new IwencaiContext();
             //using (var db = new StockContext())
@@ -36,14 +33,31 @@ namespace KuaFu
             //        }
             //    }
             //}
-            var stockInfos = NetEaseContext.GetStocks();
-            foreach (var stockInfo in stockInfos)
+
+            Database.SetInitializer(
+                new DropCreateDatabaseIfModelChanges<NetEaseDbContext>());
+            IEnumerable<StockInfo> stockInfoes = NetEaseContext.GetStocks();
+            foreach (StockInfo stockInfo in stockInfoes)
             {
-                Debug.WriteLine(stockInfo);
-                var histories = NetEaseContext.GetHistory(stockInfo.Symbol, stockInfo.Code);
-                foreach (var stockDetail in histories.Take(5))
+                using (var db = new NetEaseDbContext())
                 {
-                    Debug.WriteLine("{0} {1} {2}", stockDetail.Date, stockDetail.Name, stockDetail.TodayClose);
+                    if (!db.StockInfoes.Any(item => item.Code == stockInfo.Code))
+                    {
+                        db.StockInfoes.Add(stockInfo);
+                    }
+
+                    IEnumerable<StockDetail> histories = NetEaseContext.GetHistory(stockInfo.Symbol, stockInfo.Code);
+                    foreach (StockDetail stockDetail in histories/*.Take(5)*/)
+                    {
+                        Debug.WriteLine("{0} {1} {2}", stockDetail.Date, stockDetail.Name, stockDetail.TodayClose);
+                        if (!db.StockDetails.Any(
+                            item => item.Symbol == stockDetail.Symbol && item.Date == stockDetail.Date))
+                        {
+                            db.StockDetails.Add(stockDetail);
+                        }
+                    }
+
+                    db.SaveChanges();
                 }
             }
         }
