@@ -12,8 +12,11 @@ namespace KuaFu.NetEase
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public int StockDetailId { get; set; }
 
+        [Index]
         public DateTime Date { get; set; }
 
+        [Index]
+        [MaxLength(50)]
         public string Symbol { get; set; }
 
         public string Name { get; set; }

@@ -13,8 +13,12 @@ namespace KuaFu.NetEase
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public int StockInfoId { get; set; }
 
+        [Index(IsUnique = true)]
+        [MaxLength(50)]
         public string Code { get; set; }
 
+        [Index(IsUnique = true)]
+        [MaxLength(50)]
         public string Symbol { get; set; }
 
         public string Name { get; set; }

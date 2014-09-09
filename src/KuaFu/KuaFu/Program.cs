@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Data.Entity;
 using System.Diagnostics;
 using System.Linq;
@@ -35,26 +36,28 @@ namespace KuaFu
             //}
 
             Database.SetInitializer(
-                new DropCreateDatabaseIfModelChanges<NetEaseDbContext>());
+                new DropCreateDatabaseAlways<NetEaseDbContext>());
             IEnumerable<StockInfo> stockInfoes = NetEaseContext.GetStocks();
+            var i = 0;
             foreach (StockInfo stockInfo in stockInfoes)
             {
+                Console.WriteLine("正在添加第 {0} 支股票信息", i++);
                 using (var db = new NetEaseDbContext())
                 {
-                    if (!db.StockInfoes.Any(item => item.Code == stockInfo.Code))
-                    {
+                    //if (!db.StockInfoes.Any(item => item.Code == stockInfo.Code))
+                    //{
                         db.StockInfoes.Add(stockInfo);
-                    }
+                    //}
 
                     IEnumerable<StockDetail> histories = NetEaseContext.GetHistory(stockInfo.Symbol, stockInfo.Code);
                     foreach (StockDetail stockDetail in histories/*.Take(5)*/)
                     {
                         //Debug.WriteLine("{0} {1} {2}", stockDetail.Date, stockDetail.Name, stockDetail.TodayClose);
-                        if (!db.StockDetails.Any(
-                            item => item.Symbol == stockDetail.Symbol && item.Date == stockDetail.Date))
-                        {
+                        //if (!db.StockDetails.Any(
+                        //    item => item.Symbol == stockDetail.Symbol && item.Date == stockDetail.Date))
+                        //{
                             db.StockDetails.Add(stockDetail);
-                        }
+                        //}
                     }
 
                     db.SaveChanges();
