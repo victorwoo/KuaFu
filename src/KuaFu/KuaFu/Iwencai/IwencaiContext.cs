@@ -6,6 +6,7 @@ using System.Linq;
 using System.Net;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using System.Threading;
 using Newtonsoft.Json.Linq;
 
 namespace KuaFu.Iwencai
@@ -17,6 +18,7 @@ namespace KuaFu.Iwencai
             int total;
             string token;
             GetDailyStockFromHtml(keyWord, out total, out token);
+            Thread.Sleep(1000);
             IEnumerable<T> results = GetDailyStockFromAjax<T>(total, token);
             return results;
         }
@@ -32,8 +34,6 @@ namespace KuaFu.Iwencai
                 try
                 {
                     string responseString = HttpGet(url);
-                    Debug.WriteLine(responseString);
-
                     IEnumerable<T> result = GetDailyStockFromAjaxResult<T>(responseString);
                     return result;
                 }
@@ -54,11 +54,13 @@ namespace KuaFu.Iwencai
             {
                 try
                 {
-                    string responseString = HttpGet(url);
-                    Debug.WriteLine(responseString);
+                    string responseString = HttpGet(url, 15000);
 
                     GetDailyStockFromHtmlString(responseString, out total, out token);
-                    return;
+                    if (total != 0)
+                    {
+                        return;
+                    }
                 }
                 catch (Exception e)
                 {
@@ -73,6 +75,8 @@ namespace KuaFu.Iwencai
                 Regex.Match(responseString, "^var allResult = (?<ALL_RESULT>.*?);$",
                     RegexOptions.Multiline | RegexOptions.ExplicitCapture).Groups["ALL_RESULT"].Value;
             allResultString = Regex.Unescape(allResultString);
+            Debug.WriteLine(allResultString);
+
             JObject allResult = JObject.Parse(allResultString);
             total = (int) allResult["total"];
             token = (string) allResult["token"];
@@ -80,6 +84,7 @@ namespace KuaFu.Iwencai
 
         private static IEnumerable<T> GetDailyStockFromAjaxResult<T>(string responseString) where T : class, new()
         {
+            Debug.WriteLine(Regex.Unescape(responseString));
             JObject rootObject = JObject.Parse(responseString);
             var fieldTypes = (JArray) rootObject["fieldType"];
             var list = (JArray) rootObject["list"];
@@ -91,31 +96,40 @@ namespace KuaFu.Iwencai
                     return ((IwencaiAttribute) attribs[0]).Order;
                 })
                 .ToArray();
-            for (int i = 0; i < list.Count; i++)
+            foreach (JToken t1 in list)
             {
                 var t = new T();
-                var fieldType = (string) fieldTypes[i];
-                var itemString = (string) list[i];
-                switch (fieldType)
+                var itemStrings = t1.Select(item=>item.Value<string>()).ToArray();
+
+                for (int j = 0; j < fieldTypes.Count; j++)
                 {
-                    case "STR":
-                        properties[i].SetValue(t, itemString, null);
-                        break;
-                    case "DOUBLE":
-                        properties[i].SetValue(t, double.Parse(itemString), null);
-                        break;
-                    default:
-                        break;
+                    var fieldType = (string)fieldTypes[j];
+                    switch (fieldType)
+                    {
+                        case "STR":
+                            properties[j].SetValue(t, itemStrings[j], null);
+                            break;
+                        case "DOUBLE":
+                            double value;
+                            if (!double.TryParse(itemStrings[j], out value))
+                            {
+                                value = double.NaN;
+                            }
+                            properties[j].SetValue(t, value, null);
+                            break;
+                    }
                 }
+                
                 yield return t;
             }
             //return null;
         }
 
-        private static string HttpGet(string url)
+        private static string HttpGet(string url, int timeout = 5000)
         {
+            Debug.WriteLine(url);
             var req = (HttpWebRequest) WebRequest.Create(url);
-            req.Timeout = 10000;
+            req.Timeout = timeout;
             using (var resp = (HttpWebResponse) req.GetResponse())
             {
                 var reader = new StreamReader(resp.GetResponseStream());

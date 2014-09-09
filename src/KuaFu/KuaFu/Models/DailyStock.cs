@@ -1,13 +1,15 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 using KuaFu.Iwencai;
 
-namespace KuaFu
+namespace KuaFu.Models
 {
-    class DailyStock
+    public class DailyStock
     {
+        [Key]
+        [DatabaseGeneratedAttribute(DatabaseGeneratedOption.Identity)]
+        public int DailyStockID { get; set; }
+
         /// <summary>
         /// 股票代码
         /// </summary>
