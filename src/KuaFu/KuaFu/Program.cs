@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data.Entity;
-using System.Diagnostics;
 using System.Linq;
 using KuaFu.NetEase;
 
@@ -36,50 +35,63 @@ namespace KuaFu
             //}
 
             Database.SetInitializer(
-                new DropCreateDatabaseAlways<NetEaseDbContext>());
+                new DropCreateDatabaseIfModelChanges<NetEaseDbContext>());
 
-            Console.WriteLine("清除脏数据");
+            Console.Write("清除脏数据");
             using (var db = new NetEaseDbContext())
             {
-                foreach (var stockInfo in db.StockInfoes.Where(item => !item.IsCompleted))
+                foreach (StockInfo stockInfo in db.StockInfoes.Where(item => !item.IsCompleted))
                 {
-                    var symbol = stockInfo.Symbol;
-                    var dirtyDetails = db.StockDetails.Where(item => item.Symbol == symbol);
+                    string symbol = stockInfo.Symbol;
+                    IQueryable<StockDetail> dirtyDetails = db.StockDetails.Where(item => item.Symbol == symbol);
                     db.StockDetails.RemoveRange(dirtyDetails);
                     db.StockInfoes.Remove(stockInfo);
                 }
             }
+            Console.ForegroundColor = ConsoleColor.DarkGreen;
+            Console.WriteLine(" [成功]");
+            Console.ResetColor();
 
             IEnumerable<StockInfo> stockInfoes = NetEaseContext.GetStocks();
-            var i = 0;
+            int i = 0;
             foreach (StockInfo stockInfo in stockInfoes)
             {
-                Console.WriteLine("添加第 {0} 支股票信息", i++);
+                Console.WriteLine();
+                Console.WriteLine("添加第 {0} 支股票（{1}）信息", i++, stockInfo.Symbol);
                 using (var db = new NetEaseDbContext())
                 {
                     if (db.StockInfoes.Any(item => item.Code == stockInfo.Code))
                     {
+                        Console.WriteLine("跳过已有数据");
                         continue;
                     }
 
                     //if (!db.StockInfoes.Any(item => item.Code == stockInfo.Code))
                     //{
-                        db.StockInfoes.Add(stockInfo);
+                    db.StockInfoes.Add(stockInfo);
                     //}
 
                     IEnumerable<StockDetail> histories = NetEaseContext.GetHistory(stockInfo.Symbol, stockInfo.Code);
-                    foreach (StockDetail stockDetail in histories/*.Take(5)*/)
+                    Console.Write("保存明细至数据库");
+                    DateTime start = DateTime.Now;
+                    foreach (StockDetail stockDetail in histories /*.Take(5)*/)
                     {
                         //Debug.WriteLine("{0} {1} {2}", stockDetail.Date, stockDetail.Name, stockDetail.TodayClose);
                         //if (!db.StockDetails.Any(
                         //    item => item.Symbol == stockDetail.Symbol && item.Date == stockDetail.Date))
                         //{
-                            db.StockDetails.Add(stockDetail);
+                        db.StockDetails.Add(stockDetail);
                         //}
                     }
 
                     stockInfo.IsCompleted = true;
                     db.SaveChanges();
+                    TimeSpan during = DateTime.Now - start;
+
+                    Console.ForegroundColor = ConsoleColor.DarkGreen;
+                    Console.Write(" [成功]");
+                    Console.ResetColor();
+                    Console.WriteLine(" {0} 秒", during.TotalSeconds);
                 }
             }
         }
