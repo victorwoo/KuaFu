@@ -92,8 +92,33 @@ namespace KuaFu.NetEase
             //Debug.WriteLine(startDate);
             //Debug.WriteLine(endDate);
 
+            NarrowDate(symbol, ref startDate, ref endDate);
+
             IEnumerable<StockDetail> results = GetCsv(code, startDate, endDate);
             return results;
+        }
+
+        private static void NarrowDate(string symbol, ref DateTime startDate, ref DateTime endDate)
+        {
+            using (var db = new NetEaseDbContext())
+            {
+                //db.StockDetails.Where(item=>item.Symbol == symbol).GroupBy(item=>item.Symbol).Select(item => new
+                //{
+                //    MaxDate = 
+                //})
+                var query =
+                    db.StockDetails.Where(stockDetail => stockDetail.Symbol == symbol)
+                        .GroupBy(stockDetail => stockDetail.Symbol)
+                        .Select(group => new
+                        {
+                            MaxDate = @group.Max(item => item.Date),
+                            MinDate = @group.Min(item => item.Date)
+                        });
+                var result = query.FirstOrDefault();
+                if (result == null) return;
+                startDate = startDate > result.MinDate ? startDate : result.MinDate;
+                endDate = endDate < result.MaxDate ? endDate : result.MaxDate;
+            }
         }
 
         private static void GetDateRange(string symbol, out DateTime startDate, out DateTime endDate)
@@ -104,7 +129,7 @@ namespace KuaFu.NetEase
                 try
                 {
                     string url = "http://quotes.money.163.com/trade/lsjysj_{0}.html";
-                    url = string.Format(url, symbol);
+                    url = String.Format(url, symbol);
 
                     string html = HttpGet(url, 10000);
                     string dateStartType = Regex.Match(
@@ -148,7 +173,7 @@ namespace KuaFu.NetEase
                     var start = DateTime.Now;
                     string url =
                         "http://quotes.money.163.com/service/chddata.html?code={0}&start={1:yyyyMMdd}&end={2:yyyyMMdd}&fields=TCLOSE;HIGH;LOW;TOPEN;LCLOSE;CHG;PCHG;TURNOVER;VOTURNOVER;VATURNOVER;TCAP;MCAP";
-                    url = string.Format(url, code, startDate, endDate);
+                    url = String.Format(url, code, startDate, endDate);
                     byte[] response = HttpGet2(url, 15000);
                     string responseString = Encoding.GetEncoding("GBK").GetString(response);
                     var csv = new CsvReader(new StringReader(responseString));
@@ -173,6 +198,59 @@ namespace KuaFu.NetEase
                     Console.ForegroundColor = ConsoleColor.DarkRed;
                     Console.Write(" [失败]");
                     Console.ResetColor();
+                }
+            }
+        }
+
+        public static void DumpData()
+        {
+            Console.Write("清除脏数据");
+            using (var db = new NetEaseDbContext())
+            {
+                foreach (StockInfo stockInfo in db.StockInfoes.Where(item => !item.IsCompleted))
+                {
+                    string symbol = stockInfo.Symbol;
+                    IQueryable<StockDetail> dirtyDetails = db.StockDetails.Where(item => item.Symbol == symbol);
+                    db.StockDetails.RemoveRange(dirtyDetails);
+                    db.StockInfoes.Remove(stockInfo);
+                }
+            }
+            Console.ForegroundColor = ConsoleColor.DarkGreen;
+            Console.WriteLine(" [成功]");
+            Console.ResetColor();
+
+            IEnumerable<StockInfo> stockInfoes = GetStocks();
+            int i = 0;
+            foreach (StockInfo stockInfo in stockInfoes)
+            {
+                Console.WriteLine();
+                Console.WriteLine("添加第 {0} 支股票（{1}）信息", i++, stockInfo.Symbol);
+                using (var db = new NetEaseDbContext())
+                {
+                    if (db.StockInfoes.Any(item => item.Code == stockInfo.Code))
+                    {
+                        Console.WriteLine("跳过已有数据");
+                        continue;
+                    }
+
+                    db.StockInfoes.Add(stockInfo);
+
+                    IEnumerable<StockDetail> histories = GetHistory(stockInfo.Symbol, stockInfo.Code);
+                    Console.Write("保存明细至数据库");
+                    DateTime start = DateTime.Now;
+                    foreach (StockDetail stockDetail in histories /*.Take(5)*/)
+                    {
+                        db.StockDetails.Add(stockDetail);
+                    }
+
+                    stockInfo.IsCompleted = true;
+                    db.SaveChanges();
+                    TimeSpan during = DateTime.Now - start;
+
+                    Console.ForegroundColor = ConsoleColor.DarkGreen;
+                    Console.Write(" [成功]");
+                    Console.ResetColor();
+                    Console.WriteLine(" {0} 秒", during.TotalSeconds);
                 }
             }
         }

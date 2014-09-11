@@ -57,10 +57,6 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Models\DailyStock.cs" />
-    <Compile Include="Iwencai\IwencaiAttribute.cs" />
-    <Compile Include="Iwencai\IwencaiContext.cs" />
-    <Compile Include="Models\StockContext.cs" />
     <Compile Include="NetEase\Json\Rootobject.cs" />
     <Compile Include="NetEase\Json\List.cs" />
     <Compile Include="NetEase\NetEaseContext.cs" />

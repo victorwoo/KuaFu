@@ -1,13 +1,12 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using KuaFu.Iwencai;
 
-namespace KuaFu.Models
+namespace KuaFu.Iwencai
 {
     public class DailyStock
     {
         [Key]
-        [DatabaseGeneratedAttribute(DatabaseGeneratedOption.Identity)]
+        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public int DailyStockID { get; set; }
 
         /// <summary>
