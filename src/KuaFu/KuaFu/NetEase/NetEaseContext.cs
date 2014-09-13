@@ -25,7 +25,7 @@ namespace KuaFu.NetEase
                 var reader = new StreamReader(resp.GetResponseStream());
                 string result = reader.ReadToEnd();
                 TimeSpan during = DateTime.Now - start;
-                Debug.WriteLine("耗时: " + during.TotalSeconds + " 秒");
+                Debug.WriteLine(string.Format("耗时: {0:N0} 秒", during.TotalSeconds));
                 return result;
             }
         }
@@ -42,12 +42,11 @@ namespace KuaFu.NetEase
 // ReSharper disable once PossibleNullReferenceException
                 resp.GetResponseStream().CopyTo(ms);
                 TimeSpan during = DateTime.Now - start;
-                Debug.WriteLine("耗时: " + during.TotalSeconds + " 秒");
+                Debug.WriteLine(string.Format("耗时: {0:N0} 秒", during.TotalSeconds));
                 byte[] array = ms.ToArray();
                 return array;
             }
         }
-
 
         public static IEnumerable<StockInfo> GetStocks()
         {
@@ -83,45 +82,7 @@ namespace KuaFu.NetEase
             }
         }
 
-        public static IEnumerable<StockDetail> GetHistory(string symbol, string code)
-        {
-            DateTime startDate;
-            DateTime endDate;
-            GetDateRange(symbol, out startDate, out endDate);
-
-            //Debug.WriteLine(startDate);
-            //Debug.WriteLine(endDate);
-
-            NarrowDate(symbol, ref startDate, ref endDate);
-
-            IEnumerable<StockDetail> results = GetCsv(code, startDate, endDate);
-            return results;
-        }
-
-        private static void NarrowDate(string symbol, ref DateTime startDate, ref DateTime endDate)
-        {
-            using (var db = new NetEaseDbContext())
-            {
-                //db.StockDetails.Where(item=>item.Symbol == symbol).GroupBy(item=>item.Symbol).Select(item => new
-                //{
-                //    MaxDate = 
-                //})
-                var query =
-                    db.StockDetails.Where(stockDetail => stockDetail.Symbol == symbol)
-                        .GroupBy(stockDetail => stockDetail.Symbol)
-                        .Select(group => new
-                        {
-                            MaxDate = @group.Max(item => item.Date),
-                            MinDate = @group.Min(item => item.Date)
-                        });
-                var result = query.FirstOrDefault();
-                if (result == null) return;
-                startDate = startDate > result.MinDate ? startDate : result.MinDate;
-                endDate = endDate < result.MaxDate ? endDate : result.MaxDate;
-            }
-        }
-
-        private static void GetDateRange(string symbol, out DateTime startDate, out DateTime endDate)
+        private static void GetDateRangeFromServer(string symbol, out DateTime startDate, out DateTime endDate)
         {
             Console.Write("获取日期范围");
             while (true)
@@ -162,6 +123,50 @@ namespace KuaFu.NetEase
             }
         }
 
+        private static void GetDateRangeFromDatabase(string symbol, out DateTime? startDate, out DateTime? endDate)
+        {
+            using (var db = new NetEaseDbContext())
+            {
+                var query =
+                    db.StockDetails.Where(stockDetail => stockDetail.Symbol == symbol)
+                        .GroupBy(stockDetail => stockDetail.Symbol)
+                        .Select(group => new
+                        {
+                            MaxDate = @group.Max(item => item.Date),
+                            MinDate = @group.Min(item => item.Date)
+                        });
+                var result = query.FirstOrDefault();
+                if (result == null)
+                {
+                    startDate = null;
+                    endDate = null;
+                }
+                else
+                {
+                    startDate = result.MinDate;
+                    endDate = result.MaxDate;
+                }
+            }
+        }
+
+        public static IEnumerable<StockDetail> GetHistories(string symbol, string code)
+        {
+            DateTime startDate1;
+            DateTime endDate1;
+            GetDateRangeFromServer(symbol, out startDate1, out endDate1);
+
+            DateTime? startDate2;
+            DateTime? endDate2;
+            GetDateRangeFromDatabase(symbol, out startDate2, out endDate2);
+
+            IEnumerable<StockDetail> results = GetCsv(code, startDate1, endDate1);
+            if (startDate2 != null && endDate2 != null)
+            {
+                results = results.Where(item => item.Date < startDate2.Value || item.Date > endDate2.Value);
+            }
+            return results;
+        }
+
         private static IEnumerable<StockDetail> GetCsv(string code, DateTime startDate, DateTime endDate)
         {
             Console.Write("获取个股历史明细");
@@ -189,7 +194,7 @@ namespace KuaFu.NetEase
                     Console.ForegroundColor = ConsoleColor.DarkGreen;
                     Console.Write(" [成功]");
                     Console.ResetColor();
-                    Console.WriteLine(" {0} 秒，{1} 条数据", during.TotalSeconds, result.Count);
+                    Console.WriteLine(" {0:N2} 秒，{1:N0} 条数据", during.TotalSeconds, result.Count);
                     return result;
                 }
 // ReSharper disable once EmptyGeneralCatchClause
@@ -204,53 +209,44 @@ namespace KuaFu.NetEase
 
         public static void DumpData()
         {
-            Console.Write("清除脏数据");
-            using (var db = new NetEaseDbContext())
-            {
-                foreach (StockInfo stockInfo in db.StockInfoes.Where(item => !item.IsCompleted))
-                {
-                    string symbol = stockInfo.Symbol;
-                    IQueryable<StockDetail> dirtyDetails = db.StockDetails.Where(item => item.Symbol == symbol);
-                    db.StockDetails.RemoveRange(dirtyDetails);
-                    db.StockInfoes.Remove(stockInfo);
-                }
-            }
-            Console.ForegroundColor = ConsoleColor.DarkGreen;
-            Console.WriteLine(" [成功]");
-            Console.ResetColor();
-
             IEnumerable<StockInfo> stockInfoes = GetStocks();
             int i = 0;
             foreach (StockInfo stockInfo in stockInfoes)
             {
                 Console.WriteLine();
-                Console.WriteLine("添加第 {0} 支股票（{1}）信息", i++, stockInfo.Symbol);
+                Console.WriteLine("添加第 {0} 支股票（{1}）信息", ++i, stockInfo.Symbol);
                 using (var db = new NetEaseDbContext())
                 {
-                    if (db.StockInfoes.Any(item => item.Code == stockInfo.Code))
+                    var original = db.StockInfoes.SingleOrDefault(item => item.Code == stockInfo.Code);
+                    if (original != null)
                     {
-                        Console.WriteLine("跳过已有数据");
-                        continue;
+                        // 如果已有本支股票信息
+                        original.Symbol = stockInfo.Symbol;
+                        original.Name = stockInfo.Name;
+                    }
+                    else
+                    {
+                        // 如果没有本支股票信息
+                        db.StockInfoes.Add(stockInfo);
                     }
 
-                    db.StockInfoes.Add(stockInfo);
-
-                    IEnumerable<StockDetail> histories = GetHistory(stockInfo.Symbol, stockInfo.Code);
+                    IEnumerable<StockDetail> histories = GetHistories(stockInfo.Symbol, stockInfo.Code);
                     Console.Write("保存明细至数据库");
                     DateTime start = DateTime.Now;
+                    int count = 0;
                     foreach (StockDetail stockDetail in histories /*.Take(5)*/)
                     {
                         db.StockDetails.Add(stockDetail);
+                        count++;
                     }
 
-                    stockInfo.IsCompleted = true;
                     db.SaveChanges();
                     TimeSpan during = DateTime.Now - start;
 
                     Console.ForegroundColor = ConsoleColor.DarkGreen;
                     Console.Write(" [成功]");
                     Console.ResetColor();
-                    Console.WriteLine(" {0} 秒", during.TotalSeconds);
+                    Console.WriteLine(" {0:N2} 秒，{1:N0} 条有效数据", during.TotalSeconds, count);
                 }
             }
         }
