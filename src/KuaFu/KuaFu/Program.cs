@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data.Entity;
 using System.Linq;
 using KuaFu.NetEase;
+using KuaFu.Trade;
 
 namespace KuaFu
 {
@@ -13,7 +14,11 @@ namespace KuaFu
             Database.SetInitializer(
                 new DropCreateDatabaseIfModelChanges<NetEaseDbContext>());
 
-            NetEaseContext.DumpData();
+            //NetEaseContext.DumpData();
+
+            var trader = new Trader1(1/1000, 5);
+            trader.Initialize();
+            trader.Simulate();
         }
     }
 }

@@ -21,29 +21,29 @@ namespace KuaFu.NetEase
 
         public string Name { get; set; }
 
-        public double TodayClose { get; set; }
+        public decimal TodayClose { get; set; }
 
-        public double High { get; set; }
+        public decimal High { get; set; }
 
-        public double Low { get; set; }
+        public decimal Low { get; set; }
 
-        public double TodayOpen { get; set; }
+        public decimal TodayOpen { get; set; }
 
-        public double LastClose { get; set; }
+        public decimal LastClose { get; set; }
 
-        public double Change { get; set; }
+        public decimal Change { get; set; }
 
-        public double ChangeInPercent { get; set; }
+        public decimal ChangeInPercent { get; set; }
 
-        public double TurnOver { get; set; }
+        public decimal TurnOver { get; set; }
 
-        public double VolumeTurnOver { get; set; }
+        public decimal VolumeTurnOver { get; set; }
 
-        public double VolumeAmountTurnOver { get; set; }
+        public decimal VolumeAmountTurnOver { get; set; }
 
-        public double TotalCapitalization { get; set; }
+        public decimal TotalCapitalization { get; set; }
 
-        public double MovingCapitalization { get; set; }
+        public decimal MovingCapitalization { get; set; }
     }
 
     public sealed class StockDetailMap : CsvClassMap<StockDetail>
@@ -77,8 +77,8 @@ namespace KuaFu.NetEase
 
             public object ConvertFromString(TypeConverterOptions options, string text)
             {
-                double value;
-                double.TryParse(text, out value);
+                decimal value;
+                decimal.TryParse(text, out value);
                 return value;
             }
 

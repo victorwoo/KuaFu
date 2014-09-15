@@ -16,5 +16,7 @@ namespace KuaFu.NetEase
         public DbSet<StockInfo> StockInfoes { get; set; }
 
         public DbSet<StockDetail> StockDetails { get; set; }
+
+        public DbSet<TradeInfo> TradInfoes { get; set; }
     }
 }

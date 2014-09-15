@@ -22,10 +22,11 @@ namespace KuaFu.NetEase
             req.Timeout = timeout;
             using (var resp = (HttpWebResponse) req.GetResponse())
             {
+// ReSharper disable once AssignNullToNotNullAttribute
                 var reader = new StreamReader(resp.GetResponseStream());
                 string result = reader.ReadToEnd();
                 TimeSpan during = DateTime.Now - start;
-                Debug.WriteLine(string.Format("耗时: {0:N0} 秒", during.TotalSeconds));
+                Debug.WriteLine("耗时: {0:N0} 秒", during.TotalSeconds);
                 return result;
             }
         }
@@ -42,7 +43,7 @@ namespace KuaFu.NetEase
 // ReSharper disable once PossibleNullReferenceException
                 resp.GetResponseStream().CopyTo(ms);
                 TimeSpan during = DateTime.Now - start;
-                Debug.WriteLine(string.Format("耗时: {0:N0} 秒", during.TotalSeconds));
+                Debug.WriteLine("耗时: {0:N0} 秒", during.TotalSeconds);
                 byte[] array = ms.ToArray();
                 return array;
             }
@@ -60,7 +61,7 @@ namespace KuaFu.NetEase
                     string json = HttpGet(url, 10000);
 
                     var rootObject = JsonConvert.DeserializeObject<Rootobject>(json);
-                    var result = rootObject.list.Select(item => new StockInfo
+                    IEnumerable<StockInfo> result = rootObject.list.Select(item => new StockInfo
                     {
                         Code = item.CODE,
                         Symbol = item.SYMBOL,
@@ -175,7 +176,7 @@ namespace KuaFu.NetEase
             {
                 try
                 {
-                    var start = DateTime.Now;
+                    DateTime start = DateTime.Now;
                     string url =
                         "http://quotes.money.163.com/service/chddata.html?code={0}&start={1:yyyyMMdd}&end={2:yyyyMMdd}&fields=TCLOSE;HIGH;LOW;TOPEN;LCLOSE;CHG;PCHG;TURNOVER;VOTURNOVER;VATURNOVER;TCAP;MCAP";
                     url = String.Format(url, code, startDate, endDate);
@@ -189,7 +190,7 @@ namespace KuaFu.NetEase
                         result.Add(record);
                     }
 
-                    var during = DateTime.Now - start;
+                    TimeSpan during = DateTime.Now - start;
 
                     Console.ForegroundColor = ConsoleColor.DarkGreen;
                     Console.Write(" [成功]");
@@ -207,9 +208,14 @@ namespace KuaFu.NetEase
             }
         }
 
-        public static void DumpData()
+        public static void DumpData(int stockCount = 100, int days = 100)
         {
             IEnumerable<StockInfo> stockInfoes = GetStocks();
+            if (stockCount != 0 && stockCount != -1)
+            {
+                stockInfoes = stockInfoes.Take(stockCount);
+            }
+
             int i = 0;
             foreach (StockInfo stockInfo in stockInfoes)
             {
@@ -217,7 +223,7 @@ namespace KuaFu.NetEase
                 Console.WriteLine("添加第 {0} 支股票（{1}）信息", ++i, stockInfo.Symbol);
                 using (var db = new NetEaseDbContext())
                 {
-                    var original = db.StockInfoes.SingleOrDefault(item => item.Code == stockInfo.Code);
+                    StockInfo original = db.StockInfoes.SingleOrDefault(item => item.Code == stockInfo.Code);
                     if (original != null)
                     {
                         // 如果已有本支股票信息
@@ -231,6 +237,13 @@ namespace KuaFu.NetEase
                     }
 
                     IEnumerable<StockDetail> histories = GetHistories(stockInfo.Symbol, stockInfo.Code);
+                    if (days != 0 || days != -1)
+                    {
+                        var stockDetails = histories as StockDetail[] ?? histories.ToArray();
+                        var total = stockDetails.Count();
+                        var available = Math.Min(days, total);
+                        histories = stockDetails.Skip(total - available).Take(available);
+                    }
                     Console.Write("保存明细至数据库");
                     DateTime start = DateTime.Now;
                     int count = 0;
