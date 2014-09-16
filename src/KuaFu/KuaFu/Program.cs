@@ -14,11 +14,14 @@ namespace KuaFu
             Database.SetInitializer(
                 new DropCreateDatabaseIfModelChanges<NetEaseDbContext>());
 
-            //NetEaseContext.DumpData();
+            NetEaseContext.DumpData(0, 0);
 
             var trader = new Trader1(1/1000, 5);
             trader.Initialize();
             trader.Simulate();
+
+            Console.WriteLine("按任意键继续……");
+            Console.ReadLine();
         }
     }
 }

@@ -25,6 +25,7 @@ namespace KuaFu.Trade
         /// <returns>股票代码。</returns>
         public string PickStock(DateTime date)
         {
+            Console.WriteLine("选股。");
             List<string> pickedStocks;
             string[] avalailableSymbols = GetAvailableStocks();
             using (var db = new NetEaseDbContext())
@@ -43,6 +44,7 @@ namespace KuaFu.Trade
                 pickedStocks = symbols.Intersect(limitUpStocks).ToList();
             }
 
+            Console.WriteLine("选到 {0} 只好股票", pickedStocks.Count);
             if (pickedStocks.Count > 0)
             {
                 int randomIndex = Random.Next(0, pickedStocks.Count);
@@ -54,12 +56,13 @@ namespace KuaFu.Trade
 
         public IEnumerable<string> GetLimitUpStocks(DateTime date)
         {
+            Console.WriteLine("获取涨停股票。");
             using (var db = new NetEaseDbContext())
             {
                 return db.StockDetails
                     .Where(
                         item => item.Date == date && item.ChangeInPercent > (decimal) 9.9 && item.ChangeInPercent < 11)
-                    .Select(item => item.Symbol);
+                    .Select(item => item.Symbol).ToList();
             }
         }
 
@@ -90,7 +93,7 @@ namespace KuaFu.Trade
 
                 // 收盘时，统计总资产。
                 decimal fullBalance = GetFullBalance(currentDate);
-                Console.Write("{0:yyyy-M-d dddd} 总资产为：{1:N2}", currentDate, fullBalance);
+                Console.WriteLine("{0:yyyy-M-d dddd} 总资产为：{1:N2}", currentDate, fullBalance);
 
                 // 日期增加。
                 DateTime? nextDate = GetOpenDate(currentDate, 1);

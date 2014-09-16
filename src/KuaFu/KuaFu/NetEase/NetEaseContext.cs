@@ -237,7 +237,7 @@ namespace KuaFu.NetEase
                     }
 
                     IEnumerable<StockDetail> histories = GetHistories(stockInfo.Symbol, stockInfo.Code);
-                    if (days != 0 || days != -1)
+                    if (days != 0 && days != -1)
                     {
                         var stockDetails = histories as StockDetail[] ?? histories.ToArray();
                         var total = stockDetails.Count();
