@@ -1,5 +1,34 @@
 ﻿#$DebugPreference = 'SilentlyContinue'
 $DebugPreference = 'Continue'
+
+function Update-IwencaiItem {
+    param (
+        [Parameter(ValueFromPipeline=$true)]
+        $IwencaiItem,
+        $Replacements
+    )
+
+    process {
+        if (!$Replacements) {
+            return $IwencaiItem
+        }
+
+        $IwencaiItem -eq $null
+        $IwencaiItem | Get-Member -MemberType NoteProperty | ForEach-Object {
+            [string]$name = $_.Name
+            $newName = $name
+            $Replacements.Keys | ForEach-Object {
+                $key = $_
+                $value = $Replacements[$key]
+
+                if ($name -contains $value) {
+                    $newName = $newName.Replace($key, $value)
+                }
+            }
+        }
+    }
+}
+
 function get-standarddeviation {            
     [CmdletBinding()]            
     param (            
@@ -21,8 +50,7 @@ function get-standarddeviation {
 <# 根据自然语言的问句，从 http://www.iwencai.com/ 获取数据列表 #>
 function Get-ListFromIwencai {
     Param(
-        [string] $QueryWord,
-        [string[]] $Properties
+        [string] $QueryWord
     )
     
     Write-Debug $queryWord
@@ -102,13 +130,14 @@ function Get-ListFromIwencai {
 
     $fieldTypes = $allResult.fieldType
     $restResult.list | ForEach-Object {
+        $listItem = $_
         $result = New-Object -TypeName PSObject
-        for ($i = 0; $i -lt $Properties.Length; $i++) {
-            $value = $_[$i]
+        for ($i = 0; $i -lt $listItem.Length; $i++) {
+            $value = $listItem[$i]
             $value = [regex]::Unescape($value) -creplace '(?m)<a href=".*?">(.*?)</a>', '${1}'
             switch ($fieldTypes[$i]) {
                 'STR' {
-                    # $value = $value
+                    # $value = $value3
                 };
                 'DOUBLE' {
                     $x = $null
@@ -116,7 +145,7 @@ function Get-ListFromIwencai {
                     $value = $x
                 }
             }
-            $result | Add-Member -MemberType NoteProperty -Name $Properties[$i] -Value $value
+            $result | Add-Member -MemberType NoteProperty -Name $allResult.title[$i] -Value $value
         }
 
         $result
@@ -227,8 +256,15 @@ for ($i = 0; $i -lt $tradeDates.Length; $i++) {
         #'LimitType', # 涨跌原因类别
         #'LimitReason' # 涨跌原因
 
-    $list = Get-ListFromIwencai $querySentence $properties |
-        Sort-Object N1ChangeInPercent -Descending
+    $list = Get-ListFromIwencai $querySentence
+    $list | Update-IwencaiItem -Replacements @{
+        'T-2' = $p2;
+        'T-1' = $p1;
+        'T+0' = $date;
+        'T+1' = $n1;
+    }
+    # $properties |
+    #    Sort-Object N1ChangeInPercent -Descending
     #$list = $list |
     #    Where-Object LimitType -NE '其他'
     if ($list -and $list[0] -and [double]::TryParse($list[0].N1ChangeInPercent, [ref]$null)) {
