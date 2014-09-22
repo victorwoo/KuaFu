@@ -1,5 +1,21 @@
-﻿#$DebugPreference = 'SilentlyContinue'
-$DebugPreference = 'Continue'
+﻿$DebugPreference = 'SilentlyContinue'  # 不显示调试信息
+#$DebugPreference = 'Continue'         # 要显示调试信息
+$GenerateSentenceOnly = $false         # 仅仅生成查询语句，并不进行在线查询。
+$DaysCount = 365                       # 循环测试天数。
+$OpenResult = $false                   # 自动打开结果文件
+$TotalHandlingCharge = 0.003           # 手续费率总和
+$querySentenceTemplate = @'
+T-2涨跌幅<3%
+
+T-1涨跌幅<-1%
+
+T+0高开
+T+0涨跌幅>5%
+T+0涨跌幅<9%
+T+0换手率>7%
+
+T+1涨跌幅
+'@                                     # 查询语句，可在 http://www.iwencai.com 事先测试。
 
 function Update-IwencaiItem {
     param (
@@ -13,19 +29,19 @@ function Update-IwencaiItem {
             return $IwencaiItem
         }
 
-        $IwencaiItem -eq $null
         $IwencaiItem | Get-Member -MemberType NoteProperty | ForEach-Object {
             [string]$name = $_.Name
             $newName = $name
             $Replacements.Keys | ForEach-Object {
-                $key = $_
-                $value = $Replacements[$key]
+                $newName = $newName.Replace($Replacements[$_], $_)
+            }
+            $newName = $newName -creplace '(?<NAME>.*)\((?<UNIT>%\))<br>(?<DATE>.*)', '${DATE}${NAME}'
 
-                if ($name -contains $value) {
-                    $newName = $newName.Replace($key, $value)
-                }
+            if ($newName -ne $name) {
+                $IwencaiItem | Add-Member -MemberType NoteProperty -Name $newName -Value $IwencaiItem.$name
             }
         }
+        return $IwencaiItem
     }
 }
 
@@ -61,7 +77,7 @@ function Get-ListFromIwencai {
     $success = $false
     while (-not $success) {
         try {
-            Write-Debug $url
+            #Write-Debug $url
             $content = Invoke-RestMethod $url -TimeoutSec 15
         } catch {}
 
@@ -114,8 +130,6 @@ function Get-ListFromIwencai {
     }
     #>
 
-    #Start-Sleep -Seconds 5
-
     $url = 'http://www.iwencai.com/stockpick/cache?token={0}&p={1}&perpage={2}' -f $token, 1, $total
     $success = $false
     while (-not $success) {
@@ -154,17 +168,17 @@ function Get-ListFromIwencai {
 
 function IsWorkDay {
     Param(
-        [datetime]$Date
+        [datetime]$t0
     )
 
-    $dayOfWeek = $Date.DayOfWeek.value__
+    $dayOfWeek = $t0.DayOfWeek.value__
     return $dayOfWeek -ge 1 -and $dayOfWeek -le 5
 }
 
 <# 获取下 N 个或前 N 个交易日。 #>
 function Get-OpenDate {
     Param (
-        [datetime]$Date,
+        [datetime]$t0,
         [int]$Offset
     )
 
@@ -178,136 +192,122 @@ function Get-OpenDate {
 
     for ($i = 0; $i -lt [math]::Abs($Offset); $i++) {
         do {
-            $Date = $Date.AddDays($step)
-        } until (IsWorkDay $Date)
+            $t0 = $t0.AddDays($step)
+        } until (IsWorkDay $t0)
     }
 
-    return $Date
+    return $t0
 }
 
 $warnings = @()
 $changes = @()
 $todayAverages = @()
 
-$tradeDates = 0..99 | ForEach-Object {
-    $date = (Get-Date).AddDays(-$_)
-    return $date
+$tradeDates = 0..($DaysCount - 1) | ForEach-Object {
+    $t0 = (Get-Date).AddDays(-$_)
+    return $t0
 }
 
+$tradeDates = $tradeDates | Sort-Object
+$changeRate = 1
 for ($i = 0; $i -lt $tradeDates.Length; $i++) {
-    $date = $tradeDates[$i]
-    Write-Progress -Activity $date.ToShortDateString() -PercentComplete ($i / $tradeDates.Length * 100) -CurrentOperation $i
-    #$date = [datetime]"9月16日"
-    if (!(IsWorkDay $date)) {
+    $t0 = $tradeDates[$i]
+    Write-Progress -Activity 模拟运算 -PercentComplete ($i / $tradeDates.Length * 100) -CurrentOperation "$($t0.ToShortDateString()) [$i/$($tradeDates.Count)]"
+    #$t0 = [datetime]"9月16日"
+    if (!(IsWorkDay $t0)) {
         continue
     }
-    $p1 = Get-OpenDate $date -1
-    $p2 = Get-OpenDate $date -2
-    $n1 = Get-OpenDate $date 1
+    $p1 = Get-OpenDate $t0 -1
+    $p2 = Get-OpenDate $t0 -2
+    $p3 = Get-OpenDate $t0 -3
+    $n1 = Get-OpenDate $t0 1
+    $n2 = Get-OpenDate $t0 2
+    $n3 = Get-OpenDate $t0 3
+
     if ($n1.Date -ge (Get-Date).Date) {
         continue
     }
 
-    echo ('T = {0:M月d日}' -f $date)
-    <#
-    $querySentenceTemplate = 'T-1涨停，T+0高开，T+0涨跌幅<9.5，T+0换手率<5%，T+1涨跌幅'
-    $querySentenceTemplate = $querySentenceTemplate -replace 'T\-2', '{0:M月d日}'
-    $querySentenceTemplate = $querySentenceTemplate -replace 'T\-1', '{1:M月d日}'
-    $querySentenceTemplate = $querySentenceTemplate -replace 'T\+0', '{2:M月d日}'
-    $querySentenceTemplate = $querySentenceTemplate -replace 'T\+1', '{3:M月d日}'
-    $querySentence = $querySentenceTemplate -f $p2, $p1, $date, $n1
-    echo $querySentence
-    $uriTemplate = 'http://www.iwencai.com/stockpick/search?preParams=&ts=1&f=1&qs=1&selfsectsn=&querytype=&searchfilter=&tid=stockpick&w={0}'
-    $uri = $uriTemplate -f $querySentence
+    echo ('T = {0:M月d日}' -f $t0)
+   
+    $querySentence = $querySentenceTemplate
+    $querySentence = $querySentence.Split("`r`n")
+    $querySentence = $querySentence | Where-Object { ![string]::IsNullOrWhiteSpace($_) -and !$_.StartsWith('#') -and !$_.StartsWith('//') }
+    $querySentence = $querySentence -join "，"
 
-    Start-Process $uri
-    continue
-    #>
-    
-    $querySentenceTemplate = 'T-1涨跌幅>3%，T-1涨跌幅<5%，T+0高开，T+0涨跌幅>2%，T+0涨跌幅<9.5%，T+0换手率>3%，T+1涨跌幅'
-    $querySentenceTemplate = $querySentenceTemplate -replace 'T\-2', '{0:M月d日}'
-    $querySentenceTemplate = $querySentenceTemplate -replace 'T\-1', '{1:M月d日}'
-    $querySentenceTemplate = $querySentenceTemplate -replace 'T\+0', '{2:M月d日}'
-    $querySentenceTemplate = $querySentenceTemplate -replace 'T\+1', '{3:M月d日}'
-    $querySentence = $querySentenceTemplate -f $p2, $p1, $date, $n1
+    $querySentence = $querySentence -replace 'T\-3', '{0:M月d日}'
+    $querySentence = $querySentence -replace 'T\-2', '{1:M月d日}'
+    $querySentence = $querySentence -replace 'T\-1', '{2:M月d日}'
+    $querySentence = $querySentence -replace 'T\+0', '{3:M月d日}'
+    $querySentence = $querySentence -replace 'T\+1', '{4:M月d日}'
+    $querySentence = $querySentence -replace 'T\+2', '{5:M月d日}'
+    $querySentence = $querySentence -replace 'T\+3', '{6:M月d日}'
+    $querySentence = $querySentence -f $p3, $p2, $p1, $t0, $n1, $n2, $n3
 
-    #$querySentenceTemplate = '{0:M月d日}涨停，涨跌原因类别非新股，{1:M月d日}高开，{1:M月d日}涨跌幅>0%，{1:M月d日}涨跌幅<9.9，{2:M月d日}涨跌幅'
-    #$querySentence = $querySentenceTemplate -f $p1, $date, $n1
-
-    #http://www.iwencai.com/stockpick/search?preParams=&ts=1&f=1&qs=1&selfsectsn=&querytype=&searchfilter=&tid=stockpick&w=9%E6%9C%8818%E6%97%A5%E6%B6%A8%E5%81%9C%EF%BC%8C%E6%B6%A8%E8%B7%8C%E5%8E%9F%E5%9B%A0%E7%B1%BB%E5%88%AB%E9%9D%9E%E6%96%B0%E8%82%A1%EF%BC%8C9%E6%9C%8819%E6%97%A5%E9%AB%98%E5%BC%80%EF%BC%8C9%E6%9C%8819%E6%97%A5%E6%B6%A8%E5%B9%85%E5%A4%A7%E4%BA%8E1%EF%BC%8C9%E6%9C%8820%E6%97%A5%E6%B6%A8%E5%B9%85
-    $uriTemplate = 'http://www.iwencai.com/stockpick/search?preParams=&ts=1&f=1&qs=1&selfsectsn=&querytype=&searchfilter=&tid=stockpick&w={0}'
-    $uri = $uriTemplate -f $querySentence
-
-    # Start-Process $uri
-    $properties = 'Name', # 股票代码
-        'Symbol', # 股票简称
-        #'ChangeInPercentRealtime', # 最新涨跌幅%
-        #'LastTradePriceOnly', # 最新价(元)
-
-        #'P1Limit', # p1涨跌停
-        'P1ChangeInPercent', # p1涨跌幅(%)
-        'T0ChangeInPercent', # t0涨跌幅(%)
-        'T0TurnOverRate', # t0换手率(%)
-        'N1ChangeInPercent' # n1涨跌幅(%)
-
-        #'P1Change', # p1涨跌(元)
-        #'SSTS', # 上市天数
-        
-        #'LimitType', # 涨跌原因类别
-        #'LimitReason' # 涨跌原因
-
-    $list = Get-ListFromIwencai $querySentence
-    $list | Update-IwencaiItem -Replacements @{
-        'T-2' = $p2;
-        'T-1' = $p1;
-        'T+0' = $date;
-        'T+1' = $n1;
+    if ($GenerateSentenceOnly) {
+        echo $querySentence
+        continue
     }
-    # $properties |
-    #    Sort-Object N1ChangeInPercent -Descending
-    #$list = $list |
-    #    Where-Object LimitType -NE '其他'
-    if ($list -and $list[0] -and [double]::TryParse($list[0].N1ChangeInPercent, [ref]$null)) {
-        Write-Debug ($list | Select-Object Name, @{N='T+1'; E={'{0:P}' -f ($_.N1ChangeInPercent / 100)}}, Symbol | Format-Table -AutoSize | Out-String)
-        #$list | ConvertTo-Csv -NoTypeInformation | Out-File -Encoding utf8 -FilePath 'output.csv'
-        $list |
-            Where-Object { $_.N1ChangeInPercent -lt 0.3 } |
-            ForEach-Object {
-                $warnings += $_
-                #Write-Warning ('{0} {1:P}' -f $_.Name, ($_.N1ChangeInPercent / 100))
-            }
+
+    $uriTemplate = 'http://www.iwencai.com/stockpick/search?preParams=&ts=1&f=1&qs=1&selfsectsn=&querytype=&searchfilter=&tid=stockpick&w={0}'
+    $uri = $uriTemplate -f $querySentence
+    $list = Get-ListFromIwencai $querySentence
+    $list = $list | Update-IwencaiItem -Replacements @{
+        'T-2' = '{0:yyyy.MM.dd}' -f $p2;
+        'T-1' = '{0:yyyy.MM.dd}' -f $p1;
+        'T+0' = '{0:yyyy.MM.dd}' -f $t0;
+        'T+1' = '{0:yyyy.MM.dd}' -f $n1;
+        'Name' = '股票代码';
+        'Symbol' = '股票简称';
+    } | Sort-Object 'T+1涨跌幅' -Descending
+
+    if ($list -and $list.Count -gt 0 -and $list[0].'T+1涨跌幅') {
+        Write-Debug ($list | Select-Object Name, @{N='T+1'; E={'{0:P}' -f ($_.'T+1涨跌幅' / 100)}}, Symbol | Format-Table -AutoSize | Out-String)
+
         $list | 
-            Select-Object -ExpandProperty N1ChangeInPercent |
+            Select-Object -ExpandProperty 'T+1涨跌幅' |
             ForEach-Object {
                 $changes += $_
             }
         
         $todayAverage = ($list |
-            Select-Object -ExpandProperty N1ChangeInPercent |
+            Select-Object -ExpandProperty 'T+1涨跌幅' |
             Measure-Object -Average).Average
         $todayAverages += [pscustomobject][ordered]@{
-            Date = '{0:M月d日}' -f $date;
+            Date = '{0:M月d日}' -f $t0;
             AverageN1ChangeInPercent = $todayAverage
         }
-        echo ("算数平均值：{0:P} 标准差：{1:N}" -f (($changes | Measure-Object -Average).Average / 100), (get-standarddeviation $changes))
+        echo ('本日平均涨跌幅：{0:P}' -f ($todayAverage / 100))
+        $changeRate *= (1 + $todayAverage / 100 - $TotalHandlingCharge)
+        "算数平均值：{0:P}，标准差：{1:N}，总资产：{2:P}" -f
+            (($changes | Measure-Object -Average).Average / 100), (get-standarddeviation $changes), $changeRate |
+            Tee-Object -Variable log
     }
 }
 
-echo ("自然日数：{0:D}，有效日数：{1:D}，统计股数：{2:D}" -f $tradeDates.Length, $todayAverages.Length, $changes.Length)
-#exit
+echo ''
+echo 模拟结束
+if ($GenerateSentenceOnly) { exit }
 
-if (Test-Path output.csv) {
-    del output.csv
-}
+echo $log
+echo "$($querySentenceTemplate.Replace("`r`n`r`n", "`r`n").Replace("`r`n", "，"))" >> Get-Stock.log
+echo $log >> Get-Stock.log
+
+"自然日数：{0:D}，有效日数：{1:D}，统计股数：{2:D}，年增长率：{3:P}" -f 
+    $tradeDates.Length, 
+    $todayAverages.Length, 
+    $changes.Length, 
+    (($changeRate - 1) * 365 / $tradeDates.Length) | 
+        Tee-Object -Variable log
+echo $log >> Get-Stock.log
+echo '' >> Get-Stock.log
 
 $csvName = "N1ChangeInPercent_{0:hhmmss}.csv" -f (Get-Date)
 $changes | ForEach-Object {
     echo $_ >> $csvName
 }
-Start-Process $csvName
+if ($OpenResult) { Start-Process $csvName }
 
 $csvName = "AverageN1ChangeInPercent_{0:hhmmss}.csv" -f (Get-Date)
 $todayAverages | Export-Csv -Path $csvName -Encoding UTF8 -NoTypeInformation
-Start-Process $csvName
-
-#$warnings | Out-GridView
+if ($OpenResult) { Start-Process $csvName }
